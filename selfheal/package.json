@@ -1,0 +1,36 @@
+{
+  "name": "selfheal",
+  "version": "0.1.0",
+  "description": "A self-healing CLI wrapper: runs your command, and if it fails, asks an LLM to diagnose and patch the code, then retries.",
+  "type": "module",
+  "bin": {
+    "selfheal": "bin/selfheal.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node bin/selfheal.mjs"
+  },
+  "keywords": [
+    "cli",
+    "agent",
+    "self-healing",
+    "llm",
+    "anthropic",
+    "openai",
+    "auto-fix",
+    "ci"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/selfheal"
+  }
+}
