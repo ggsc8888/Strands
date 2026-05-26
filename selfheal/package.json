@@ -1,7 +1,7 @@
 {
   "name": "selfheal",
-  "version": "0.1.0",
-  "description": "A self-healing CLI wrapper: runs your command, and if it fails, asks an LLM to diagnose and patch the code, then retries.",
+  "version": "0.2.0",
+  "description": "A self-healing CLI wrapper: run a command, and on failure ask an LLM to diagnose and patch the code, then retry. Also exposes 'diagnose' and 'apply' subcommands so any coding agent can call it as a tool.",
   "type": "module",
   "bin": {
     "selfheal": "bin/selfheal.mjs"
@@ -9,6 +9,8 @@
   "files": [
     "bin",
     "src",
+    "SKILL.md",
+    "AGENTS.md",
     "README.md",
     "LICENSE"
   ],
@@ -16,7 +18,8 @@
     "node": ">=20"
   },
   "scripts": {
-    "start": "node bin/selfheal.mjs"
+    "start": "node bin/selfheal.mjs",
+    "test": "node --test test/"
   },
   "keywords": [
     "cli",
@@ -26,7 +29,11 @@
     "anthropic",
     "openai",
     "auto-fix",
-    "ci"
+    "diagnose",
+    "patch",
+    "ci",
+    "coding-agent",
+    "tool-use"
   ],
   "license": "MIT",
   "repository": {

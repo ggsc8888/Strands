@@ -2,26 +2,28 @@ const SYSTEM = `You are "selfheal", an expert software-engineering agent embedde
 A user's command just failed. You must:
 1) Read the command, exit code, stdout, stderr, and any source files provided.
 2) Identify the single most likely root cause.
-3) Produce a MINIMAL unified-diff patch that fixes it.
+3) Produce a MINIMAL unified-diff patch that fixes it (unless told not to).
 
 OUTPUT FORMAT (strict):
-First, a short plain-text diagnosis (2-6 lines).
+First, a short plain-text diagnosis (2-6 lines) covering: what failed, root cause,
+why your fix addresses it.
 Then, a fenced code block tagged "diff" containing one unified diff
-that applies cleanly from the repo root with: \`git apply -p0\`.
+that applies cleanly from the repo root with: \`git apply -p1\`.
 
 Rules:
-- Use file headers of the form "--- a/<path>" and "+++ b/<path>" with hunks "@@ ... @@".
+- Use file headers "--- a/<path>" and "+++ b/<path>" with hunks "@@ ... @@".
 - Use POSIX paths relative to the repo root (matching the paths shown in context).
 - Edit only files that were shown to you, unless creating a new file is clearly required.
 - For new files, use "--- /dev/null" and "+++ b/<path>".
 - Do NOT include explanations inside the diff block.
 - Do NOT include shell commands, package installs, or environment changes — only file edits.
-- If no source files were provided and the fix requires editing unseen code, still propose your best minimal diff against the most likely path; include a one-line note above the diff if you are guessing.
-- If a previous patch attempt failed (provided below), avoid repeating the same change.
+- If a previous patch attempt failed (shown below), do NOT repeat the same change.
+- If you are guessing because no source was provided, say so in one line before the diff.
+- If asked for diagnosis only (no patch), omit the diff block entirely.
 `;
 
-export async function diagnose({ provider, context, previous }) {
-  const user = buildUserMessage(context, previous);
+export async function diagnose({ provider, context, previous, wantPatch = true }) {
+  const user = buildUserMessage(context, previous, wantPatch);
   const text =
     provider.name === "anthropic"
       ? await callAnthropic(provider, user)
@@ -29,17 +31,19 @@ export async function diagnose({ provider, context, previous }) {
   return parseResponse(text);
 }
 
-function buildUserMessage(ctx, previous) {
+function buildUserMessage(ctx, previous, wantPatch) {
   const parts = [];
   parts.push(`CWD: ${ctx.cwd}`);
   parts.push(`COMMAND: ${ctx.command}`);
   parts.push(`EXIT CODE: ${ctx.exitCode}`);
   parts.push("");
-  parts.push("STDOUT (tail):");
-  parts.push("```");
-  parts.push(ctx.stdout || "(empty)");
-  parts.push("```");
-  parts.push("STDERR (tail):");
+  if (ctx.stdout) {
+    parts.push("STDOUT (tail):");
+    parts.push("```");
+    parts.push(ctx.stdout);
+    parts.push("```");
+  }
+  parts.push("STDERR / OUTPUT (tail):");
   parts.push("```");
   parts.push(ctx.stderr || "(empty)");
   parts.push("```");
@@ -60,7 +64,11 @@ function buildUserMessage(ctx, previous) {
     parts.push(previous.patch);
     parts.push("```");
   }
-  parts.push("\nNow produce the diagnosis and the unified-diff patch.");
+  parts.push(
+    wantPatch
+      ? "\nNow produce the diagnosis and the unified-diff patch."
+      : "\nNow produce the diagnosis only. Do NOT include a diff block."
+  );
   return parts.join("\n");
 }
 
@@ -79,9 +87,7 @@ async function callAnthropic(provider, user) {
       messages: [{ role: "user", content: user }],
     }),
   });
-  if (!res.ok) {
-    throw new Error(`Anthropic API ${res.status}: ${await res.text()}`);
-  }
+  if (!res.ok) throw new Error(`Anthropic API ${res.status}: ${await res.text()}`);
   const json = await res.json();
   const text = (json.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n");
   if (!text) throw new Error("Anthropic returned no text content");
@@ -104,17 +110,14 @@ async function callOpenAI(provider, user) {
       temperature: 0.2,
     }),
   });
-  if (!res.ok) {
-    throw new Error(`OpenAI API ${res.status}: ${await res.text()}`);
-  }
+  if (!res.ok) throw new Error(`OpenAI API ${res.status}: ${await res.text()}`);
   const json = await res.json();
   const text = json.choices?.[0]?.message?.content;
   if (!text) throw new Error("OpenAI returned no message content");
   return text;
 }
 
-function parseResponse(text) {
-  // Extract first ```diff ... ``` block (also accept ```patch or unlabeled fence with diff-y header)
+export function parseResponse(text) {
   const fenceRe = /```(?:diff|patch)?\s*\n([\s\S]*?)```/g;
   let patch = null;
   let m;
